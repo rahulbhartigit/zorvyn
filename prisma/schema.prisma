@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────
+
+// Roles: Viewer (read-only), Analyst (read + insights), Admin (full access)
+enum RoleName {
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+// Financial record type
+enum RecordType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum Currency {
+  INR
+  USD
+  EUR
+}
+
+// RBAC permission building blocks
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+}
+
+enum PermissionResource {
+  USERS
+  RECORDS
+  DASHBOARD
+}
+
+// User status
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+// ─── Role ─────────────────────────────────────────────────
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        RoleName @unique
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  permissions Permission[]
+
+  @@map("roles")
+}
+
+// ─── Permission ───────────────────────────────────────────
+// Dynamic RBAC — each role gets explicit (resource, action) pairs.
+// e.g. ADMIN gets (RECORDS, CREATE), (RECORDS, DELETE), etc.
+// Checked at runtime by the authorize middleware.
+
+model Permission {
+  id       String             @id @default(uuid()) @db.Uuid
+  roleId   String             @db.Uuid
+  resource PermissionResource
+  action   PermissionAction
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([roleId, resource, action])
+  @@map("permissions")
+}
+
+// ─── User ─────────────────────────────────────────────────
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  firstName    String     @map("first_name")
+  lastName     String     @map("last_name")
+  roleId       String     @db.Uuid
+  status       UserStatus @default(ACTIVE)
+
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  role             Role              @relation(fields: [roleId], references: [id])
+  financialRecords FinancialRecord[]
+  refreshTokens    RefreshToken[]
+
+  @@index([email])
+  @@index([roleId])
+  @@index([status])
+  @@map("users")
+}
+
+// ─── Refresh Token ────────────────────────────────────────
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique
+  userId    String   @db.Uuid @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  revoked   Boolean  @default(false)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+// ─── Financial Record ─────────────────────────────────────
+
+model FinancialRecord {
+  id          String     @id @default(uuid()) @db.Uuid
+  type        RecordType
+  amount      Decimal    @db.Decimal(12, 2)
+  currency    Currency   @default(INR)
+  category    String
+  description String?    @db.Text
+
+  recordDate  DateTime @map("record_date") @db.Date @default(now())
+  createdById String   @map("created_by_id") @db.Uuid
+  isDeleted   Boolean  @default(false) @map("is_deleted")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  createdBy User @relation(fields: [createdById], references: [id])
+
+  // Composite index for dashboard aggregation queries
+  @@index([recordDate, type, createdById])
+  // Individual indexes for filtering
+  @@index([type])
+  @@index([category])
+  @@index([createdById])
+  @@index([isDeleted])
+  @@map("financial_records")
+}

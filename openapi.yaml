@@ -1,0 +1,333 @@
+openapi: 3.0.0
+info:
+  title: Zorvyn API
+  version: 1.0.0
+  description: Financial tracking backend API
+
+servers:
+  - url: http://localhost:3000
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        statusCode:
+          type: number
+      example:
+        message: "Something went wrong"
+        statusCode: 400
+
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        role: { type: string }
+      example:
+        id: "uuid"
+        email: "rahul@example.com"
+        firstName: "Rahul"
+        lastName: "Bharti"
+        role: "ADMIN"
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        user:
+          $ref: "#/components/schemas/User"
+
+    Record:
+      type: object
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [INCOME, EXPENSE]
+        amount: { type: number }
+        currency: { type: string }
+        category: { type: string }
+        description: { type: string }
+        recordDate:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateRecordRequest:
+      type: object
+      required: [type, amount, currency, category]
+      properties:
+        type:
+          type: string
+          enum: [INCOME, EXPENSE]
+        amount: { type: number }
+        currency: { type: string }
+        category: { type: string }
+        description: { type: string }
+
+    UpdateRecordRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [INCOME, EXPENSE]
+        amount: { type: number }
+        category: { type: string }
+        description: { type: string }
+        recordDate:
+          type: string
+          format: date
+
+    PaginatedRecords:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Record"
+        pagination:
+          type: object
+          properties:
+            total: { type: number }
+            page: { type: number }
+            limit: { type: number }
+            totalPages: { type: number }
+
+paths:
+  # ================= AUTH =================
+
+  /api/auth/register:
+    post:
+      summary: Register a new user
+      description: Create a new user account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              email: "rahul@example.com"
+              password: "123456"
+              firstName: "Rahul"
+              lastName: "Bharti"
+              role: "ADMIN"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/login:
+    post:
+      summary: Login user
+      description: Authenticate and return tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              email: "rahul@example.com"
+              password: "123456"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+
+  /api/auth/logout:
+    post:
+      summary: Logout user
+      description: Invalidate refresh token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              refreshToken: "jwt-refresh-token"
+      responses:
+        "200":
+          description: Logout successful
+
+  /api/auth/refresh:
+    post:
+      summary: Refresh token
+      description: Generate new access token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              refreshToken: "jwt-refresh-token"
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid refresh token
+
+  # ================= RECORDS =================
+
+  /api/records:
+    post:
+      summary: Create a record
+      description: Add a new income or expense record.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              type: "EXPENSE"
+              amount: 1200
+              currency: "INR"
+              category: "food"
+              description: "Dinner"
+      responses:
+        "201":
+          description: Record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Record"
+        "401":
+          description: Unauthorized
+
+    get:
+      summary: Get records
+      description: Fetch records with pagination and filters.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: number
+            example: 1
+        - name: limit
+          in: query
+          schema:
+            type: number
+            example: 10
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Records fetched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedRecords"
+
+  /api/records/{id}:
+    put:
+      summary: Update record
+      description: Update a specific record.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            example:
+              amount: 1500
+              category: "food"
+      responses:
+        "200":
+          description: Record updated
+        "404":
+          description: Record not found
+
+    delete:
+      summary: Delete record
+      description: Delete a specific record.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Record deleted
+        "404":
+          description: Record not found
+
+  # ================= DASHBOARD =================
+
+  /api/dashboard/summary:
+    get:
+      summary: Get overall summary
+      description: Returns total income, expense, and balance.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Summary fetched
+
+  /api/dashboard/category-wise:
+    get:
+      summary: Category breakdown
+      description: Returns category-wise totals.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Category data fetched
+
+  /api/dashboard/recent:
+    get:
+      summary: Recent transactions
+      description: Returns latest transactions.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Recent records fetched
+
+  /api/dashboard/monthly-trends:
+    get:
+      summary: Monthly trends
+      description: Returns monthly analytics.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Trends fetched
