@@ -3,6 +3,10 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - "src/**"
+      - "Dockerfile"
+      - "package.json"
 
 jobs:
   # =========================

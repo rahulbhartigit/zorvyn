@@ -13,6 +13,8 @@ Zorvyn is a modern backend API built with Node.js, Express, and TypeScript. It f
 - **Input Validation**: Strongly typed validation using Zod schemas.
 - **API Documentation**: OpenAPI (Swagger) integration for easy discovery of API endpoints.
 - **Testing**: Jest for reliable automated testing.
+- **Docker Support**: Containerized environment for consistent builds and deployments.
+- **CI/CD Pipeline**: GitHub Actions integration for automated testing, Docker builds, and EC2 deployment.
 
 ## Prerequisites
 
@@ -34,7 +36,8 @@ Create a `.env` file in the root directory and add the necessary environment var
 
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/zorvyn?schema=public"
-JWT_SECRET="your_jwt_secret"
+ACCESS_SECRET="your_access_secret"
+REFRESH_SECRET="your_refresh_secret"
 PORT=3000
 ```
 
@@ -66,6 +69,26 @@ The project utilizes Jest for testing. You can run the test suite with:
 ```bash
 npm run test
 ```
+
+### 6. Using Docker
+
+You can also build and run the application using Docker:
+
+```bash
+# Build the Docker image
+docker build -t zorvyn .
+
+# Run the container (ensure your .env variables match your local setup or pass them directly)
+docker run -p 3000:3000 --env-file .env zorvyn
+```
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions (`.github/workflows/ci.yml`) for Continuous Integration and Deployment on pushes to the `master` branch. The pipeline consists of:
+
+1. **Test Job**: Provisions a PostgreSQL service in CI, applies database migrations, and executes the Jest test suite to ensure code health.
+2. **Build Job**: Builds the application into a Docker image and pushes it to Docker Hub.
+3. **Deploy Job**: Connects to the production EC2 instance via SSH, pulls the latest image, and restarts the running container.
 
 ## Project Structure
 
