@@ -4,9 +4,7 @@ on:
   push:
     branches: [master]
     paths-ignore:
-      - "src/**"
-      - "Dockerfile"
-      - "package.json"
+      - "README.md"
 
 jobs:
   # =========================
@@ -110,7 +108,6 @@ jobs:
             docker run -d \
               -p 3000:3000 \
               --name zorvyn \
-              -e ACCESS_SECRET='${{ secrets.ACCESS_SECRET }}' \
               -e DATABASE_URL='${{ secrets.DATABASE_URL }}' \
               -e ACCESS_SECRET='${{ secrets.ACCESS_SECRET }}' \
               -e REFRESH_SECRET='${{secrets.REFRESH_SECRET}}' \
