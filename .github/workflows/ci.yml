@@ -1,15 +1,16 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
+# =========================
+# 1. TEST JOB
+# =========================
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15
@@ -20,10 +21,10 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="pg_isready -U test_user"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     env:
       DATABASE_URL: postgresql://test_user:test_password@localhost:5432/zorvyn_test?schema=public
@@ -31,33 +32,81 @@ jobs:
       PORT: 3000
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Run Prisma Generate
-      run: npx prisma generate
+      - name: Generate Prisma Client
+        run: npx prisma generate
 
-    - name: Run Database Migrations
-      run: npx prisma migrate deploy
+      - name: Wait for DB
+        run: npx wait-on tcp:5432
 
-    - name: Run tests
-      run: npm test
+      - name: Run migrations
+        run: npx prisma migrate deploy
 
-  build-docker:
+      - name: Run tests
+        run: npm test
+
+
+# =========================
+# 2. BUILD & PUSH DOCKER
+# =========================
+  build:
     runs-on: ubuntu-latest
     needs: test
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
 
-    - name: Build Docker Image
-      run: docker build -t zorvyn:latest .
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build Docker Image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/zorvyn:latest .
+          docker tag ${{ secrets.DOCKER_USERNAME }}/zorvyn:latest ${{ secrets.DOCKER_USERNAME }}/zorvyn:${{ github.sha }}
+
+      - name: Push Docker Image
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/zorvyn:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/zorvyn:${{ github.sha }}
+
+
+# =========================
+# 3. DEPLOY TO EC2
+# =========================
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKER_USERNAME }}/zorvyn:latest
+
+            docker stop zorvyn || true
+            docker rm zorvyn || true
+
+            docker run -d \
+              -p 3000:3000 \
+              --name zorvyn \
+              --restart always \
+              ${{ secrets.DOCKER_USERNAME }}/zorvyn:latest
