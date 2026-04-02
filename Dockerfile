@@ -21,7 +21,7 @@ RUN npx tsc
 # =========================
 # 2. Production Stage
 # =========================
-FROM node:18-alpine AS runner
+FROM node:20-alpine AS runner
 
 WORKDIR /app
 
