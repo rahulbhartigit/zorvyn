@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.git
+.github
+coverage
+tests
+jest.config.js
+tsconfig.test.json
+*.md
