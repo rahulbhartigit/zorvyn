@@ -37,7 +37,7 @@ RUN npm ci --only=production
 RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
-
+COPY --from=builder /app/openapi.yaml ./openapi.yaml
 USER node
 
 EXPOSE 3000
